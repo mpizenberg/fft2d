@@ -70,7 +70,7 @@ fn fft_2d_with_direction(
     }
 
     // Transpose the image to be able to compute the FFT on the other dimension.
-    let mut transposed = transpose(width, height, &img_buffer);
+    let mut transposed = transpose(width, height, img_buffer);
     let fft_height = planner.plan_fft(height, direction);
     scratch.resize(fft_height.get_outofplace_scratch_len(), Complex::default());
     for (tr_buf, col_buf) in transposed
