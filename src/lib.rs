@@ -6,3 +6,6 @@
 
 // default implementation on mutable slices
 pub mod slice;
+
+#[cfg(feature = "nalgebra")]
+pub mod nalgebra;
