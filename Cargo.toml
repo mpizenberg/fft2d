@@ -1,0 +1,23 @@
+[package]
+name = "fft2d"
+version = "0.1.0"
+authors = [
+    "Matthieu Pizenberg <matthieu.pizenberg@gmail.com>",
+]
+edition = "2021"
+description = "Fourier transform for 2D data such as images"
+readme = "README.md"
+repository = "https://github.com/mpizenberg/fft2d"
+homepage = "https://github.com/mpizenberg/fft2d"
+license = "MPL-2.0"
+keywords = ["fft", "fourier", "image", "2d"]
+categories = ["algorithms", "graphics", "computer-vision"]
+
+[dependencies]
+rustfft = "6.0.1"
+
+[dev-dependencies]
+show-image = { version = "0.10.1", features = ["image"] }
+image = { version = "0.23.14", default-features = false, features = ["jpeg"] }
+nalgebra = { version = "0.29.0", default-features = false, features = ["std"] }
+rustfft = "6.0.1"
