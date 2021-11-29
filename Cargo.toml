@@ -22,3 +22,10 @@ show-image = { version = "0.10.1", features = ["image"] }
 image = { version = "0.23.14", default-features = false, features = ["jpeg"] }
 nalgebra = { version = "0.29.0", default-features = false, features = ["std"] }
 rustfft = "6.0.1"
+
+[[example]]
+name = "low_pass"
+
+[[example]]
+name = "low_pass_nalgebra"
+required-features = ["nalgebra"]

@@ -39,7 +39,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          # args: --release
+          args: --all-features
 
   check_formatting:
     name: Check formatting
