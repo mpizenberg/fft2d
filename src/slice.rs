@@ -139,3 +139,79 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
     }
     shifted
 }
+
+// Sine and Cosine transforms ##################################################
+
+#[cfg(feature = "rustdct")]
+/// Cosine and Sine transforms.
+pub mod dcst {
+
+    use super::transpose;
+    use rustdct::DctPlanner;
+
+    /// Compute the 2D cosine transform of an image buffer.
+    ///
+    /// The image buffer is considered to be stored in row major order.
+    /// After the 2D DCT has been applied, the buffer contains the transposed
+    /// of the cosine transform since one transposition is needed to process
+    /// the columns of the image buffer.
+    ///
+    /// The transformation is not normalized.
+    /// To normalize the output, you should multiply it by 2 / sqrt( width * height ).
+    /// If this is used as a pair of DCT followed by inverse DCT,
+    /// is is more efficient to normalize only once at the end.
+    ///
+    /// Remark: an allocation the size of the image buffer is performed for the transposition,
+    /// as well as a scratch buffer while performing the rows and columns transforms.
+    pub fn dct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+        // Compute the FFT of each row of the image.
+        let mut planner = DctPlanner::new();
+        let dct_width = planner.plan_dct2(width);
+        let mut scratch = vec![0.0; dct_width.get_scratch_len()];
+        for row_buffer in img_buffer.chunks_exact_mut(width) {
+            dct_width.process_dct2_with_scratch(row_buffer, &mut scratch);
+        }
+
+        // Transpose the image to be able to compute the FFT on the other dimension.
+        let mut transposed = transpose(width, height, img_buffer);
+        let dct_height = planner.plan_dct2(height);
+        scratch.resize(dct_height.get_scratch_len(), 0.0);
+        for column_buffer in transposed.chunks_exact_mut(height) {
+            dct_height.process_dct2_with_scratch(column_buffer, &mut scratch);
+        }
+        img_buffer.copy_from_slice(&transposed);
+    }
+
+    /// Compute the inverse 2D cosine transform of an image buffer.
+    ///
+    /// The image buffer is considered to be stored in row major order.
+    /// After the 2D iDCT has been applied, the buffer contains the transposed
+    /// of the cosine transform since one transposition is needed to process
+    /// the columns of the image buffer.
+    ///
+    /// The transformation is not normalized.
+    /// To normalize the output, you should multiply it by 2 / sqrt( width * height ).
+    /// If this is used as a pair of DCT followed by inverse DCT,
+    /// is is more efficient to normalize only once at the end.
+    ///
+    /// Remark: an allocation the size of the image buffer is performed for the transposition,
+    /// as well as a scratch buffer while performing the rows and columns transforms.
+    pub fn idct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+        // Compute the FFT of each row of the image.
+        let mut planner = DctPlanner::new();
+        let dct_width = planner.plan_dct3(width);
+        let mut scratch = vec![0.0; dct_width.get_scratch_len()];
+        for row_buffer in img_buffer.chunks_exact_mut(width) {
+            dct_width.process_dct3_with_scratch(row_buffer, &mut scratch);
+        }
+
+        // Transpose the image to be able to compute the FFT on the other dimension.
+        let mut transposed = transpose(width, height, img_buffer);
+        let dct_height = planner.plan_dct3(height);
+        scratch.resize(dct_height.get_scratch_len(), 0.0);
+        for column_buffer in transposed.chunks_exact_mut(height) {
+            dct_height.process_dct3_with_scratch(column_buffer, &mut scratch);
+        }
+        img_buffer.copy_from_slice(&transposed);
+    }
+}
