@@ -10,7 +10,7 @@ readme = "README.md"
 repository = "https://github.com/mpizenberg/fft2d"
 homepage = "https://github.com/mpizenberg/fft2d"
 license = "MPL-2.0"
-keywords = ["fft", "fourier", "image", "2d"]
+keywords = ["fft", "fourier", "image", "2d", "dct", "fft2d", "dct2d"]
 categories = ["algorithms", "graphics", "computer-vision"]
 
 [dependencies]
