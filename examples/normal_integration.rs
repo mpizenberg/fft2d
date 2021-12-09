@@ -2,7 +2,7 @@
 
 use std::io::{BufWriter, Write};
 
-use fft2d::slice::dcst::{dct_2d, idct_2d};
+use fft2d::nalgebra::dcst::{dct_2d, idct_2d};
 use image::{GrayImage, ImageBuffer, Luma, Primitive, Rgb};
 use nalgebra::{
     allocator::Allocator, DMatrix, DefaultAllocator, Dim, MatrixSlice, Scalar, Vector2, Vector3,
@@ -13,6 +13,9 @@ use show_image::create_window;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Open image from disk.
     let img = image::open("data/cat-normal-map.png")?.into_rgb8();
+    let window_in = create_window("input normals", Default::default())?;
+    window_in.set_image("Input image", img.clone())?;
+    window_in.wait_until_destroyed()?;
 
     // Extract normals.
     let mut normals = matrix_from_rgb_image(&img, |x| *x as f32 / 255.0);
@@ -29,6 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     mat_show("depth", depths.slice_range(.., ..));
 
     // Save depth map as OBJ.
+    eprintln!("Saving data/cat.obj to disk");
     save_as_obj("data/cat.obj", &depths).unwrap();
 
     // Visualize depths.
@@ -40,13 +44,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let depth_img = image_from_matrix(&depths, depths_to_gray);
 
     // Save depth image to disk.
+    eprintln!("Saving data/cat-depth.png to disk");
     depth_img.save("data/cat-depth.png").unwrap();
-
-    // Display input image with normals.
-    let window_in = create_window("input normals", Default::default())?;
-    window_in.set_image("Input image", img)?;
-
-    window_in.wait_until_destroyed()?;
     Ok(())
 }
 
@@ -152,8 +151,7 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
 
     // Cosine transform of f.
     // WARNING: a transposition occurs here with the dct2d.
-    let mut f_cos: Vec<f64> = f.iter().map(|x| *x as f64).collect();
-    dct_2d(nrows, ncols, &mut f_cos);
+    let mut f_cos = dct_2d(f.map(|x| x as f64));
 
     // Cosine transform of z (Eq. 55 in [1])
     let pi = std::f64::consts::PI;
@@ -165,17 +163,13 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
     }
 
     // Inverse cosine transform:
-    idct_2d(ncols, nrows, &mut f_cos);
+    let depths = idct_2d(f_cos);
 
     // Z is known up to a positive constant, so offset it to get from 0 to max.
     // Also apply a normalization for the dct2d and idct2d.
+    let z_min = depths.min();
     let dct_norm_coef = 4.0 / (nrows * ncols) as f32;
-    let z_min = f_cos.iter().cloned().fold(0.0 / 0.0, f64::min);
-    DMatrix::from_iterator(
-        nrows,
-        ncols,
-        f_cos.iter().map(|z| dct_norm_coef * (z - z_min) as f32),
-    )
+    depths.map(|z| dct_norm_coef * (z - z_min) as f32)
 }
 
 /// Iterator of the shape (x, y) where y increases first.

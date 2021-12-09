@@ -155,3 +155,95 @@ where
 
     shifted
 }
+
+// Sine and Cosine transforms ##################################################
+
+#[cfg(feature = "rustdct")]
+/// Cosine and Sine transforms.
+pub mod dcst {
+
+    use super::*;
+    use rustdct::DctPlanner;
+
+    /// Compute the 2D cosine transform of a matrix.
+    ///
+    /// After the 2D DCT has been applied, the buffer contains the transposed
+    /// of the cosine transform since one transposition is needed to process the 2nd dimension.
+    ///
+    /// The transformation is not normalized.
+    /// To normalize the output, you should multiply it by 2 / sqrt( width * height ).
+    /// If this is used as a pair of DCT followed by inverse DCT,
+    /// is is more efficient to normalize only once at the end.
+    ///
+    /// Remark: an allocation the size of the matrix is performed for the transposition,
+    /// as well as a scratch buffer while performing the rows and columns transforms.
+    pub fn dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    where
+        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+    {
+        let mut mat = mat;
+        let (height, width) = mat.shape();
+
+        // Compute the FFT of each column of the matrix.
+        let mut planner = DctPlanner::new();
+        let dct_dim1 = planner.plan_dct2(height);
+        let mut scratch = vec![0.0; dct_dim1.get_scratch_len()];
+        for buffer_dim1 in mat.as_mut_slice().chunks_exact_mut(height) {
+            dct_dim1.process_dct2_with_scratch(buffer_dim1, &mut scratch);
+        }
+
+        // Transpose the matrix to compute the FFT on the other dimension.
+        let mut transposed = mat.transpose();
+        let dct_dim2 = planner.plan_dct2(width);
+        scratch.resize(dct_dim2.get_scratch_len(), 0.0);
+        for buffer_dim2 in transposed.as_mut_slice().chunks_exact_mut(width) {
+            dct_dim2.process_dct2_with_scratch(buffer_dim2, &mut scratch);
+        }
+        mat.copy_from_slice(transposed.as_slice());
+
+        mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
+    }
+
+    /// Compute the inverse 2D cosine transform of a matrix.
+    ///
+    /// After the 2D IDCT has been applied, the buffer contains the transposed
+    /// of the cosine transform since one transposition is needed to process the 2nd dimension.
+    ///
+    /// The transformation is not normalized.
+    /// To normalize the output, you should multiply it by 2 / sqrt( width * height ).
+    /// If this is used as a pair of DCT followed by inverse DCT,
+    /// is is more efficient to normalize only once at the end.
+    ///
+    /// Remark: an allocation the size of the matrix is performed for the transposition,
+    /// as well as a scratch buffer while performing the rows and columns transforms.
+    pub fn idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    where
+        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+    {
+        let mut mat = mat;
+        let (height, width) = mat.shape();
+
+        // Compute the FFT of each column of the matrix.
+        let mut planner = DctPlanner::new();
+        let dct_dim1 = planner.plan_dct3(height);
+        let mut scratch = vec![0.0; dct_dim1.get_scratch_len()];
+        for buffer_dim1 in mat.as_mut_slice().chunks_exact_mut(height) {
+            dct_dim1.process_dct3_with_scratch(buffer_dim1, &mut scratch);
+        }
+
+        // Transpose the matrix to compute the FFT on the other dimension.
+        let mut transposed = mat.transpose();
+        let dct_dim2 = planner.plan_dct3(width);
+        scratch.resize(dct_dim2.get_scratch_len(), 0.0);
+        for buffer_dim2 in transposed.as_mut_slice().chunks_exact_mut(width) {
+            dct_dim2.process_dct3_with_scratch(buffer_dim2, &mut scratch);
+        }
+        mat.copy_from_slice(transposed.as_slice());
+
+        mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
+    }
+}
