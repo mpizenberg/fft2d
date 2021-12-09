@@ -5,8 +5,7 @@ use std::io::{BufWriter, Write};
 use fft2d::slice::dcst::{dct_2d, idct_2d};
 use image::{GrayImage, ImageBuffer, Luma, Primitive, Rgb};
 use nalgebra::{
-    allocator::Allocator, Const, DMatrix, DefaultAllocator, Dim, Dynamic, MatrixSlice, OMatrix,
-    Scalar, Vector2, U3,
+    allocator::Allocator, DMatrix, DefaultAllocator, Dim, MatrixSlice, Scalar, Vector2, Vector3,
 };
 use show_image::create_window;
 
@@ -14,18 +13,10 @@ use show_image::create_window;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Open image from disk.
     let img = image::open("data/cat-normal-map.png")?.into_rgb8();
-    let (width, height) = img.dimensions();
 
     // Extract normals.
-    let normals = DMatrix::from_iterator(
-        3 * width as usize,
-        height as usize,
-        img.as_raw().iter().map(|p| *p as f32 / 255.0),
-    );
-    let mut normals: OMatrix<f32, U3, Dynamic> =
-        normals.reshape_generic(Const::<3>, Dynamic::new((width * height) as usize));
-
-    for mut n in normals.column_iter_mut() {
+    let mut normals = matrix_from_rgb_image(&img, |x| *x as f32 / 255.0);
+    for n in normals.iter_mut() {
         if n.x + n.y + n.z != 0.0 {
             n.x = (n.x - 0.5) * -2.0;
             n.y = (n.y - 0.5) * -2.0;
@@ -33,15 +24,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             n.normalize_mut();
         }
     }
-    let norms = DMatrix::from_iterator(
-        width as usize,
-        height as usize,
-        normals.column_iter().map(|n| n.y),
-    );
-    mat_show("norms", norms.slice_range(.., ..));
 
-    // WARNING: normals is transposed since comming from an RGB image.
-    let depths = normal_integration(&normals, (width as usize, height as usize));
+    let depths = normal_integration(&normals);
     mat_show("depth", depths.slice_range(.., ..));
 
     // Save depth map as OBJ.
@@ -51,11 +35,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let depth_min = depths.min();
     let depth_max = depths.max();
     eprintln!("depths within [ {},  {} ]", depth_min, depth_max);
-
-    // Save depth image to disk.
     let depths_to_gray =
         |z| ((z - depth_min) / (depth_max - depth_min) * (256.0 * 256.0 - 1.0)) as u16;
     let depth_img = image_from_matrix(&depths, depths_to_gray);
+
+    // Save depth image to disk.
     depth_img.save("data/cat-depth.png").unwrap();
 
     // Display input image with normals.
@@ -68,11 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Orthographic integration of a normal field into a depth map.
 /// WARNING: normals is transposed since comming from an RGB image.
-fn normal_integration(
-    normals: &OMatrix<f32, U3, Dynamic>,
-    matrix_shape: (usize, usize),
-) -> DMatrix<f32> {
-    let (nrows, ncols) = matrix_shape;
+fn normal_integration(normals: &DMatrix<Vector3<f32>>) -> DMatrix<f32> {
+    let (nrows, ncols) = normals.shape();
 
     // Compute gradient of the log depth map.
     let mut gradient_x = DMatrix::zeros(nrows, ncols);
@@ -81,7 +62,7 @@ fn normal_integration(
         .iter_mut()
         .zip(gradient_y.iter_mut())
         // normals is 3 x npixels
-        .zip(normals.column_iter())
+        .zip(normals.iter())
     {
         // Only assign gradients different than 0
         // for pixels where the slope isn't too steep.
@@ -95,7 +76,7 @@ fn normal_integration(
     mat_show("gy", gradient_y.slice_range(.., ..));
 
     // Depth map by Poisson solver, up to an additive constant.
-    dct_poisson(&gradient_x, &gradient_y)
+    dct_poisson(&gradient_y, &gradient_x)
 }
 
 /// An implementation of a Poisson equation solver with a DCT
@@ -298,41 +279,20 @@ fn image_from_matrix<'a, T: Scalar, U: 'static + Primitive, F: Fn(&'a T) -> U>(
     img_buf
 }
 
-/// Convert a gray image into a matrix.
-/// Inverse operation of `image_from_matrix`.
-fn matrix_from_image<T: Scalar + Primitive>(img: ImageBuffer<Luma<T>, Vec<T>>) -> DMatrix<T> {
-    let (width, height) = img.dimensions();
-    DMatrix::from_row_slice(height as usize, width as usize, &img.into_raw())
-}
-
-/// Convert a `(T,T,T)` RGB matrix into an RGB image.
-/// Inverse operation of matrix_from_rgb_image.
-///
-/// This performs a transposition to accomodate for the
-/// column major matrix into the row major image.
-#[allow(clippy::cast_possible_truncation)]
-fn rgb_from_matrix<T: Scalar + Primitive>(mat: &DMatrix<(T, T, T)>) -> ImageBuffer<Rgb<T>, Vec<T>> {
-    // TODO: improve the suboptimal allocation in addition to transposition.
-    let (nb_rows, nb_cols) = mat.shape();
-    let mut img_buf = ImageBuffer::new(nb_cols as u32, nb_rows as u32);
-    for (x, y, pixel) in img_buf.enumerate_pixels_mut() {
-        let (r, g, b) = mat[(y as usize, x as usize)];
-        *pixel = Rgb([r, g, b]);
-    }
-    img_buf
-}
-
-/// Convert an RGB image into a `(T, T, T)` RGB matrix.
+/// Convert an RGB image into a `Vector3<T>` RGB matrix.
 /// Inverse operation of `rgb_from_matrix`.
-fn matrix_from_rgb_image<T: Scalar + Primitive>(
-    img: ImageBuffer<Rgb<T>, Vec<T>>,
-) -> DMatrix<(T, T, T)> {
+fn matrix_from_rgb_image<'a, T: 'static + Primitive, U: Scalar, F: Fn(&'a T) -> U>(
+    img: &'a ImageBuffer<Rgb<T>, Vec<T>>,
+    scale: F,
+) -> DMatrix<Vector3<U>> {
     // TODO: improve the suboptimal allocation in addition to transposition.
     let (width, height) = img.dimensions();
     DMatrix::from_iterator(
         width as usize,
         height as usize,
-        img.as_raw().chunks_exact(3).map(|s| (s[0], s[1], s[2])),
+        img.as_raw()
+            .chunks_exact(3)
+            .map(|s| Vector3::new(scale(&s[0]), scale(&s[1]), scale(&s[2]))),
     )
     .transpose()
 }
