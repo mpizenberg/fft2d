@@ -155,11 +155,11 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
 
     // Cosine transform of z (Eq. 55 in [1])
     let pi = std::f64::consts::PI;
-    let coords = coordinates_column_major((nrows, ncols));
-    for (f_ij, (x, y)) in f_cos.iter_mut().zip(coords) {
-        let v = Vector2::new(x as f64 / nrows as f64, y as f64 / ncols as f64);
+    let coords = coordinates_column_major((ncols, nrows));
+    for (f_cos_ij, (i, j)) in f_cos.iter_mut().zip(coords) {
+        let v = Vector2::new(i as f64 / ncols as f64, j as f64 / nrows as f64);
         let denom = 4.0 * v.map(|u| (0.5 * pi * u).sin()).norm_squared();
-        *f_ij /= -(denom.max(1e-7));
+        *f_cos_ij /= -(denom.max(1e-7));
     }
 
     // Inverse cosine transform:
@@ -172,11 +172,11 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
     depths.map(|z| dct_norm_coef * (z - z_min) as f32)
 }
 
-/// Iterator of the shape (x, y) where y increases first.
+/// Iterator of the shape (row, column) where row increases first.
 fn coordinates_column_major(shape: (usize, usize)) -> impl Iterator<Item = (usize, usize)> {
-    let (width, height) = shape;
-    (0..width)
-        .map(move |x| (0..height).map(move |y| (x, y)))
+    let (nrows, ncols) = shape;
+    (0..ncols)
+        .map(move |j| (0..nrows).map(move |i| (i, j)))
         .flatten()
 }
 
@@ -227,7 +227,7 @@ fn save_as_obj(path: &str, depth_map: &DMatrix<f32>) -> std::io::Result<()> {
     let (height, width) = depth_map.shape();
     let scale = z_max - z_min;
     let precision = (-(scale / 65536.0).log10()).ceil().max(0.0) as usize;
-    for ((x, y), z) in coordinates_column_major((width, height)).zip(depth_map) {
+    for ((y, x), z) in coordinates_column_major((height, width)).zip(depth_map) {
         writeln!(
             &mut buf_writer,
             // swap y to have y up positive
@@ -240,7 +240,7 @@ fn save_as_obj(path: &str, depth_map: &DMatrix<f32>) -> std::io::Result<()> {
     }
 
     // Write all (square) faces.
-    for (x, y) in coordinates_column_major((width - 1, height - 1)) {
+    for (y, x) in coordinates_column_major((height - 1, width - 1)) {
         let top_left = height * x + y + 1; // +1 since the count starts at 1
         let bot_left = top_left + 1;
         let bot_right = bot_left + height;
