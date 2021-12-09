@@ -230,7 +230,8 @@ fn save_as_obj(path: &str, depth_map: &DMatrix<f32>) -> std::io::Result<()> {
     for ((x, y), z) in coordinates_column_major((width, height)).zip(depth_map) {
         writeln!(
             &mut buf_writer,
-            "v {} {} {:.prec$}",
+            // swap y to have y up positive
+            "v {} -{} {:.prec$}",
             x,
             y,
             transform(z),
@@ -247,7 +248,7 @@ fn save_as_obj(path: &str, depth_map: &DMatrix<f32>) -> std::io::Result<()> {
         writeln!(
             &mut buf_writer,
             "f {} {} {} {}",
-            top_left, top_right, bot_right, bot_left,
+            top_left, bot_left, bot_right, top_right,
         )?;
     }
     Ok(())
