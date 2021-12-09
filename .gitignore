@@ -1,4 +1,8 @@
 Cargo.lock # Ignore lock file for a library
+*.png
+*.jpg
+*.obj
+examples_temp
 
 # Created by https://www.gitignore.io/api/osx,vim,rust,linux,windows
 # Edit at https://www.gitignore.io/?templates=osx,vim,rust,linux,windows
