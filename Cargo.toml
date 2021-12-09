@@ -12,6 +12,10 @@ homepage = "https://github.com/mpizenberg/fft2d"
 license = "MPL-2.0"
 keywords = ["fft", "fourier", "image", "2d", "dct", "fft2d", "dct2d"]
 categories = ["algorithms", "graphics", "computer-vision"]
+exclude = [
+    "data/",
+    ".github",
+]
 
 [dependencies]
 rustfft = "6.0.1"
