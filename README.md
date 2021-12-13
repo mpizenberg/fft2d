@@ -71,9 +71,7 @@ cargo run --release --features rustdct,nalgebra --example normal_integration
 
 ![fft2d_normal_integration](https://user-images.githubusercontent.com/2905865/145479695-1a915993-3435-4cbb-a97e-e5b0fcd3ce18.jpg)
 
-The cat normal map used in this example comes from [Harvard's photometric stereo dataset](http://vision.seas.harvard.edu/qsfs/Data.html), presented in the following paper.
-
-> Robert Frankot and Rama Chellappa. "A method for enforcing integrability in shape from shading algorithms." Pattern Analysis and Machine Intelligence, IEEE Transactions on 10.4 (1988): 439-451.
+The cat normal map used in this example comes from [Harvard's photometric stereo dataset](http://vision.seas.harvard.edu/qsfs/Data.html).
 
 The code for the normal integration is a Rust implementation of the method presented in the following paper.
 Big thanks to Yvain Quéau (@yqueau) for the help in setting up this port of [his matlab code](https://github.com/yqueau/normal_integration).
