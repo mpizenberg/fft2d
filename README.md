@@ -9,7 +9,7 @@ Implementations of the transforms are also available for [nalgebra](https://nalg
 
 Here is a partial extract of code for the `low_pass` filtering example with the input and output images, just to get a sense of the API.
 
-![fft2d_low_pass](https://user-images.githubusercontent.com/2905865/145476357-d15a5785-3204-47e3-8293-4bd5fc560738.jpg)
+![fft2d_low_pass_mandrill](https://user-images.githubusercontent.com/2905865/146199839-2cfe9f1b-ed4c-4f76-b880-fddd5b11d074.jpg)
 
 ```rust
 // Compute the 2D fft of the complex image data (beware of the transposition).

@@ -10,7 +10,7 @@ use show_image::create_window;
 #[show_image::main]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Open image from disk.
-    let img = image::open("data/lenna.jpg")?.into_luma8();
+    let img = image::open("data/mandrill.jpg")?.into_luma8();
     let (width, height) = img.dimensions();
 
     // Convert the image buffer to complex numbers to be able to compute the FFT.
