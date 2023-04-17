@@ -205,6 +205,37 @@ pub mod dcst {
 
         mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
     }
+    /// Parallel version of [`dct_2d`].
+    #[cfg(feature = "parallel")]
+    pub fn par_dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    where
+        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+    {
+        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+
+        let mut mat = mat;
+        let (height, width) = mat.shape();
+
+        // Compute the FFT of each column of the matrix.
+        let mut planner = DctPlanner::new();
+        let dct_dim1 = planner.plan_dct2(height);
+        mat.as_mut_slice()
+            .par_chunks_exact_mut(height)
+            .for_each(|buffer_dim1| dct_dim1.process_dct2(buffer_dim1));
+
+        // Transpose the matrix to compute the FFT on the other dimension.
+        let mut transposed = mat.transpose();
+        let dct_dim2 = planner.plan_dct2(width);
+        transposed
+            .as_mut_slice()
+            .par_chunks_exact_mut(width)
+            .for_each(|buffer_dim2| dct_dim2.process_dct2(buffer_dim2));
+        mat.copy_from_slice(transposed.as_slice());
+
+        mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
+    }
 
     /// Compute the inverse 2D cosine transform of a matrix.
     ///
@@ -242,6 +273,37 @@ pub mod dcst {
         for buffer_dim2 in transposed.as_mut_slice().chunks_exact_mut(width) {
             dct_dim2.process_dct3_with_scratch(buffer_dim2, &mut scratch);
         }
+        mat.copy_from_slice(transposed.as_slice());
+
+        mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
+    }
+
+    /// Parallel version of [`idct_2d`].
+    #[cfg(feature = "parallel")]
+    pub fn par_idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    where
+        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+    {
+        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+        let mut mat = mat;
+        let (height, width) = mat.shape();
+
+        // Compute the FFT of each column of the matrix.
+        let mut planner = DctPlanner::new();
+        let dct_dim1 = planner.plan_dct3(height);
+        mat.as_mut_slice()
+            .par_chunks_exact_mut(height)
+            .for_each(|buffer_dim1| dct_dim1.process_dct3(buffer_dim1));
+
+        // Transpose the matrix to compute the FFT on the other dimension.
+        let mut transposed = mat.transpose();
+        let dct_dim2 = planner.plan_dct3(width);
+        transposed
+            .as_mut_slice()
+            .par_chunks_exact_mut(width)
+            .for_each(|buffer_dim2| dct_dim2.process_dct3(buffer_dim2));
         mat.copy_from_slice(transposed.as_slice());
 
         mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
