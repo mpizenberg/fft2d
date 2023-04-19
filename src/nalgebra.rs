@@ -206,6 +206,9 @@ pub mod dcst {
         mat.reshape_generic(Dim::from_usize(width), Dim::from_usize(height))
     }
     /// Parallel version of [`dct_2d`].
+    ///
+    /// This uses rayon internally, see the rayon crate docs to control the level
+    /// of parallelism.
     #[cfg(feature = "parallel")]
     pub fn par_dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where
@@ -279,6 +282,9 @@ pub mod dcst {
     }
 
     /// Parallel version of [`idct_2d`].
+    ///
+    /// This uses rayon internally, see the rayon crate docs to control the level
+    /// of parallelism.
     #[cfg(feature = "parallel")]
     pub fn par_idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where

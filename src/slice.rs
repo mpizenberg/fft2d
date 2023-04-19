@@ -182,6 +182,35 @@ pub mod dcst {
         img_buffer.copy_from_slice(&transposed);
     }
 
+    /// Parallel version of [`dct_2d`].
+    ///
+    /// This uses rayon internally, see the rayon crate docs to control the level
+    /// of parallelism.
+    #[cfg(feature = "parallel")]
+    pub fn par_dct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+
+        let mut planner = DctPlanner::new();
+        let dct_width = planner.plan_dct2(width);
+
+        img_buffer
+            .par_chunks_exact_mut(width)
+            .for_each(|row_buffer| {
+                dct_width.process_dct2(row_buffer);
+            });
+
+        let mut transposed = transpose(width, height, img_buffer);
+        let dct_height = planner.plan_dct2(height);
+
+        transposed
+            .par_chunks_exact_mut(height)
+            .for_each(|column_buffer| {
+                dct_height.process_dct2(column_buffer);
+            });
+
+        img_buffer.copy_from_slice(&transposed);
+    }
+
     /// Compute the inverse 2D cosine transform of an image buffer.
     ///
     /// The image buffer is considered to be stored in row major order.
@@ -212,6 +241,32 @@ pub mod dcst {
         for column_buffer in transposed.chunks_exact_mut(height) {
             dct_height.process_dct3_with_scratch(column_buffer, &mut scratch);
         }
+        img_buffer.copy_from_slice(&transposed);
+    }
+
+    /// Parallel version of [`dct_2d`].
+    ///
+    /// This uses rayon internally, see the rayon crate docs to control the level
+    /// of parallelism.
+    #[cfg(feature = "parallel")]
+    pub fn par_idct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+        use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+
+        let mut planner = DctPlanner::new();
+        let dct_width = planner.plan_dct3(width);
+        img_buffer
+            .par_chunks_exact_mut(width)
+            .for_each(|row_buffer| {
+                dct_width.process_dct3(row_buffer);
+            });
+
+        let mut transposed = transpose(width, height, img_buffer);
+        let dct_height = planner.plan_dct3(height);
+        transposed
+            .par_chunks_exact_mut(height)
+            .for_each(|column_buffer| {
+                dct_height.process_dct3(column_buffer);
+            });
         img_buffer.copy_from_slice(&transposed);
     }
 }
