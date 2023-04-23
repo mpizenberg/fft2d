@@ -272,6 +272,8 @@ pub mod dcst {
 }
 
 #[cfg(test)]
+#[cfg(feature = "rustdct")]
+#[cfg(feature = "parallel")]
 mod tests {
     use super::*;
 
