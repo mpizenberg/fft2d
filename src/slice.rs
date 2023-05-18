@@ -2,8 +2,8 @@
 
 //! Fourier transform for 2D data such as images.
 
-use rustfft::FftDirection;
-use rustfft::{num_complex::Complex, FftPlanner};
+use rustfft::num_complex::Complex;
+use rustfft::{FftDirection, FftPlanner, FftNum};
 
 /// Compute the 2D Fourier transform of an image buffer.
 ///
@@ -20,7 +20,7 @@ use rustfft::{num_complex::Complex, FftPlanner};
 ///
 /// Remark: an allocation the size of the image buffer is performed for the transposition,
 /// as well as scratch buffers while performing the rows and columns FFTs.
-pub fn fft_2d(width: usize, height: usize, img_buffer: &mut [Complex<f64>]) {
+pub fn fft_2d<T: FftNum + Default>(width: usize, height: usize, img_buffer: &mut [Complex<T>]) {
     fft_2d_with_direction(width, height, img_buffer, FftDirection::Forward)
 }
 
@@ -37,7 +37,7 @@ pub fn fft_2d(width: usize, height: usize, img_buffer: &mut [Complex<f64>]) {
 ///
 /// Remark: an allocation the size of the image buffer is performed for the transposition,
 /// as well as scratch buffers while performing the rows and columns FFTs.
-pub fn ifft_2d(width: usize, height: usize, img_buffer: &mut [Complex<f64>]) {
+pub fn ifft_2d<T: FftNum + Default>(width: usize, height: usize, img_buffer: &mut [Complex<T>]) {
     fft_2d_with_direction(width, height, img_buffer, FftDirection::Inverse)
 }
 
@@ -55,10 +55,10 @@ pub fn ifft_2d(width: usize, height: usize, img_buffer: &mut [Complex<f64>]) {
 ///
 /// Remark: an allocation the size of the image buffer is performed for the transposition,
 /// as well as a scratch buffer while performing the rows and columns FFTs.
-fn fft_2d_with_direction(
+fn fft_2d_with_direction<T: FftNum + Default>(
     width: usize,
     height: usize,
-    img_buffer: &mut [Complex<f64>],
+    img_buffer: &mut [Complex<T>],
     direction: FftDirection,
 ) {
     // Compute the FFT of each row of the image.
@@ -147,7 +147,7 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
 pub mod dcst {
 
     use super::transpose;
-    use rustdct::DctPlanner;
+    use rustdct::{DctPlanner, DctNum};
 
     /// Compute the 2D cosine transform of an image buffer.
     ///
@@ -163,11 +163,11 @@ pub mod dcst {
     ///
     /// Remark: an allocation the size of the image buffer is performed for the transposition,
     /// as well as a scratch buffer while performing the rows and columns transforms.
-    pub fn dct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+    pub fn dct_2d<T: DctNum + Copy + Default>(width: usize, height: usize, img_buffer: &mut [T]) {
         // Compute the FFT of each row of the image.
         let mut planner = DctPlanner::new();
         let dct_width = planner.plan_dct2(width);
-        let mut scratch = vec![0.0; dct_width.get_scratch_len()];
+        let mut scratch = vec![T::default(); dct_width.get_scratch_len()];
         for row_buffer in img_buffer.chunks_exact_mut(width) {
             dct_width.process_dct2_with_scratch(row_buffer, &mut scratch);
         }
@@ -175,7 +175,7 @@ pub mod dcst {
         // Transpose the image to be able to compute the FFT on the other dimension.
         let mut transposed = transpose(width, height, img_buffer);
         let dct_height = planner.plan_dct2(height);
-        scratch.resize(dct_height.get_scratch_len(), 0.0);
+        scratch.resize(dct_height.get_scratch_len(), T::default());
         for column_buffer in transposed.chunks_exact_mut(height) {
             dct_height.process_dct2_with_scratch(column_buffer, &mut scratch);
         }
@@ -187,7 +187,7 @@ pub mod dcst {
     /// This uses rayon internally, see the rayon crate docs to control the level
     /// of parallelism.
     #[cfg(feature = "parallel")]
-    pub fn par_dct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+    pub fn par_dct_2d<T: DctNum + Default>(width: usize, height: usize, img_buffer: &mut [T]) {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};
 
         let mut planner = DctPlanner::new();
@@ -225,11 +225,11 @@ pub mod dcst {
     ///
     /// Remark: an allocation the size of the image buffer is performed for the transposition,
     /// as well as a scratch buffer while performing the rows and columns transforms.
-    pub fn idct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+    pub fn idct_2d<T: DctNum + Default>(width: usize, height: usize, img_buffer: &mut [T]) {
         // Compute the FFT of each row of the image.
         let mut planner = DctPlanner::new();
         let dct_width = planner.plan_dct3(width);
-        let mut scratch = vec![0.0; dct_width.get_scratch_len()];
+        let mut scratch = vec![T::default(); dct_width.get_scratch_len()];
         for row_buffer in img_buffer.chunks_exact_mut(width) {
             dct_width.process_dct3_with_scratch(row_buffer, &mut scratch);
         }
@@ -237,7 +237,7 @@ pub mod dcst {
         // Transpose the image to be able to compute the FFT on the other dimension.
         let mut transposed = transpose(width, height, img_buffer);
         let dct_height = planner.plan_dct3(height);
-        scratch.resize(dct_height.get_scratch_len(), 0.0);
+        scratch.resize(dct_height.get_scratch_len(), T::default());
         for column_buffer in transposed.chunks_exact_mut(height) {
             dct_height.process_dct3_with_scratch(column_buffer, &mut scratch);
         }
@@ -249,7 +249,7 @@ pub mod dcst {
     /// This uses rayon internally, see the rayon crate docs to control the level
     /// of parallelism.
     #[cfg(feature = "parallel")]
-    pub fn par_idct_2d(width: usize, height: usize, img_buffer: &mut [f64]) {
+    pub fn par_idct_2d<T: DctNum + Default>(width: usize, height: usize, img_buffer: &mut [T]) {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};
 
         let mut planner = DctPlanner::new();
@@ -272,12 +272,68 @@ pub mod dcst {
 }
 
 #[cfg(test)]
-#[cfg(feature = "rustdct")]
-#[cfg(feature = "parallel")]
 mod tests {
     use super::*;
 
     #[test]
+    fn test_fft_2d_f32() {
+
+        use rustfft::num_complex::Complex as C;
+
+        /*
+         * Test values obtained from numpy:
+         *
+         * >>> np.fft.fft2(np.array([[1+1j, 2+1j, 3+1j, 2+1j], ...])).transpose()
+         */
+        let mut test_vec: Vec<Complex<f32>> = vec![
+            C::new(1., 1.), C::new(2., 1.), C::new(3., 1.), C::new(2., 1.),
+            C::new(1., 2.), C::new(2., 2.), C::new(3., 2.), C::new(2., 2.),
+            C::new(1., 3.), C::new(2., 3.), C::new(3., 3.), C::new(2., 3.),
+            C::new(1., 2.), C::new(2., 2.), C::new(3., 2.), C::new(2., 2.),
+        ];
+        let expected: Vec<Complex<f32>> = vec![
+            C::new(32., 32.), C::new(0., -8.), C::new(0., 0.), C::new( 0., -8.),
+            C::new(-8.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+            C::new( 0.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+            C::new(-8.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+        ];
+
+        fft_2d(4, 4, &mut test_vec);
+
+        assert_eq!(test_vec, expected);
+    }
+
+    #[test]
+    fn test_fft_2d_f64() {
+
+        use rustfft::num_complex::Complex as C;
+
+        /*
+         * Test values obtained from numpy:
+         *
+         * >>> np.fft.fft2(np.array([[1+1j, 2+1j, 3+1j, 2+1j], ...])).transpose()
+         */
+        let mut test_vec: Vec<Complex<f64>> = vec![
+            C::new(1., 1.), C::new(2., 1.), C::new(3., 1.), C::new(2., 1.),
+            C::new(1., 2.), C::new(2., 2.), C::new(3., 2.), C::new(2., 2.),
+            C::new(1., 3.), C::new(2., 3.), C::new(3., 3.), C::new(2., 3.),
+            C::new(1., 2.), C::new(2., 2.), C::new(3., 2.), C::new(2., 2.),
+        ];
+        let expected: Vec<Complex<f64>> = vec![
+            C::new(32., 32.), C::new(0., -8.), C::new(0., 0.), C::new( 0., -8.),
+            C::new(-8.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+            C::new( 0.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+            C::new(-8.,  0.), C::new(0.,  0.), C::new(0., 0.), C::new( 0.,  0.),
+        ];
+
+        fft_2d(4, 4, &mut test_vec);
+
+        assert_eq!(test_vec, expected);
+    }
+
+    #[test]
+    #[cfg(feature = "rustdct")]
+    #[cfg(feature = "parallel")]
     fn test_identical_par_dct_result() {
         let test_vec = vec![
             54.75, 0.25, 69.39, 121.95, 15.86, 17.24, 77.48, 108.55, 127.40, 93.14, 49.28, 61.86,
@@ -298,7 +354,10 @@ mod tests {
         dcst::par_dct_2d(16, 8, &mut parallel);
         assert_eq!(non_para, parallel);
     }
+
     #[test]
+    #[cfg(feature = "rustdct")]
+    #[cfg(feature = "parallel")]
     fn test_identical_par_idct_result() {
         let test_vec = vec![
             72.16, 47.41, 122.96, 52.90, 36.35, 98.84, 84.12, 34.52, 61.06, 112.66, 39.91, 67.93,

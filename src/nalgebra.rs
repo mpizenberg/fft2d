@@ -6,7 +6,7 @@ use nalgebra::{
     allocator::Allocator, DefaultAllocator, Dim, IsContiguous, Matrix, RawStorage, RawStorageMut,
     ReshapableStorage, Scalar, Storage,
 };
-use rustfft::{num_complex::Complex, FftDirection, FftPlanner};
+use rustfft::{num_complex::Complex, FftDirection, FftPlanner, FftNum};
 
 /// Compute the 2D Fourier transform of a matrix.
 ///
@@ -22,13 +22,14 @@ use rustfft::{num_complex::Complex, FftDirection, FftPlanner};
 ///
 /// Remark: an allocation the size of the matrix is performed for the transposition,
 /// as well as scratch buffers while performing the rows and columns FFTs.
-pub fn fft_2d<R: Dim, C: Dim, S1, S2>(
-    mat: Matrix<Complex<f64>, R, C, S1>,
-) -> Matrix<Complex<f64>, C, R, S2>
+pub fn fft_2d<T, R: Dim, C: Dim, S1, S2>(
+    mat: Matrix<Complex<T>, R, C, S1>,
+) -> Matrix<Complex<T>, C, R, S2>
 where
-    S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>,
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,
-    S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>,
+    T: FftNum + Default + Clone,
+    S1: IsContiguous + RawStorageMut<Complex<T>, R, C>,
+    DefaultAllocator: Allocator<Complex<T>, C, R>,
+    S1: Storage<Complex<T>, R, C> + ReshapableStorage<Complex<T>, R, C, C, R, Output = S2>,
 {
     fft_2d_with_direction(mat, FftDirection::Forward)
 }
@@ -46,13 +47,14 @@ where
 ///
 /// Remark: an allocation the size of the matrix is performed for the transposition,
 /// as well as scratch buffers while performing the rows and columns FFTs.
-pub fn ifft_2d<R: Dim, C: Dim, S1, S2>(
-    mat: Matrix<Complex<f64>, R, C, S1>,
-) -> Matrix<Complex<f64>, C, R, S2>
+pub fn ifft_2d<T, R: Dim, C: Dim, S1, S2>(
+    mat: Matrix<Complex<T>, R, C, S1>,
+) -> Matrix<Complex<T>, C, R, S2>
 where
-    S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>,
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,
-    S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>,
+    T: FftNum + Default + Clone,
+    S1: IsContiguous + RawStorageMut<Complex<T>, R, C>,
+    DefaultAllocator: Allocator<Complex<T>, C, R>,
+    S1: Storage<Complex<T>, R, C> + ReshapableStorage<Complex<T>, R, C, C, R, Output = S2>,
 {
     fft_2d_with_direction(mat, FftDirection::Inverse)
 }
@@ -70,14 +72,15 @@ where
 ///
 /// Remark: an allocation the size of the matrix buffer is performed for the transposition,
 /// as well as a scratch buffer while performing the rows and columns FFTs.
-fn fft_2d_with_direction<R: Dim, C: Dim, S1, S2>(
-    mat: Matrix<Complex<f64>, R, C, S1>,
+fn fft_2d_with_direction<T, R: Dim, C: Dim, S1, S2>(
+    mat: Matrix<Complex<T>, R, C, S1>,
     direction: FftDirection,
-) -> Matrix<Complex<f64>, C, R, S2>
+) -> Matrix<Complex<T>, C, R, S2>
 where
-    S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>, // for the first in-place FFT
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,      // needed for the transpose()
-    S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>, // for the reshape()
+    T: FftNum + Default + Clone,
+    S1: IsContiguous + RawStorageMut<Complex<T>, R, C>, // for the first in-place FFT
+    DefaultAllocator: Allocator<Complex<T>, C, R>,      // needed for the transpose()
+    S1: Storage<Complex<T>, R, C> + ReshapableStorage<Complex<T>, R, C, C, R, Output = S2>, // for the reshape()
 {
     // FFT in the first dimension (columns).
     let mut mat = mat;
@@ -163,7 +166,7 @@ where
 pub mod dcst {
 
     use super::*;
-    use rustdct::DctPlanner;
+    use rustdct::{DctPlanner, DctNum};
 
     /// Compute the 2D cosine transform of a matrix.
     ///
@@ -177,11 +180,12 @@ pub mod dcst {
     ///
     /// Remark: an allocation the size of the matrix is performed for the transposition,
     /// as well as a scratch buffer while performing the rows and columns transforms.
-    pub fn dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    pub fn dct_2d<T, R: Dim, C: Dim, S1, S2>(mat: Matrix<T, R, C, S1>) -> Matrix<T, C, R, S2>
     where
-        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
-        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+        T: DctNum + Default + Clone,
+        S1: IsContiguous + RawStorageMut<T, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<T, C, R>,      // needed for the transpose()
+        S1: Storage<T, R, C> + ReshapableStorage<T, R, C, C, R, Output = S2>, // for the reshape()
     {
         let mut mat = mat;
         let (height, width) = mat.shape();
@@ -189,7 +193,7 @@ pub mod dcst {
         // Compute the FFT of each column of the matrix.
         let mut planner = DctPlanner::new();
         let dct_dim1 = planner.plan_dct2(height);
-        let mut scratch = vec![0.0; dct_dim1.get_scratch_len()];
+        let mut scratch = vec![T::default(); dct_dim1.get_scratch_len()];
         for buffer_dim1 in mat.as_mut_slice().chunks_exact_mut(height) {
             dct_dim1.process_dct2_with_scratch(buffer_dim1, &mut scratch);
         }
@@ -197,7 +201,7 @@ pub mod dcst {
         // Transpose the matrix to compute the FFT on the other dimension.
         let mut transposed = mat.transpose();
         let dct_dim2 = planner.plan_dct2(width);
-        scratch.resize(dct_dim2.get_scratch_len(), 0.0);
+        scratch.resize(dct_dim2.get_scratch_len(), T::default());
         for buffer_dim2 in transposed.as_mut_slice().chunks_exact_mut(width) {
             dct_dim2.process_dct2_with_scratch(buffer_dim2, &mut scratch);
         }
@@ -210,11 +214,12 @@ pub mod dcst {
     /// This uses rayon internally, see the rayon crate docs to control the level
     /// of parallelism.
     #[cfg(feature = "parallel")]
-    pub fn par_dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    pub fn par_dct_2d<T, R: Dim, C: Dim, S1, S2>(mat: Matrix<T, R, C, S1>) -> Matrix<T, C, R, S2>
     where
-        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
-        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+        T: DctNum + Default + Clone,
+        S1: IsContiguous + RawStorageMut<T, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<T, C, R>,      // needed for the transpose()
+        S1: Storage<T, R, C> + ReshapableStorage<T, R, C, C, R, Output = S2>, // for the reshape()
     {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};
 
@@ -252,11 +257,12 @@ pub mod dcst {
     ///
     /// Remark: an allocation the size of the matrix is performed for the transposition,
     /// as well as a scratch buffer while performing the rows and columns transforms.
-    pub fn idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    pub fn idct_2d<T, R: Dim, C: Dim, S1, S2>(mat: Matrix<T, R, C, S1>) -> Matrix<T, C, R, S2>
     where
-        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
-        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+        T: DctNum + Default + Clone,
+        S1: IsContiguous + RawStorageMut<T, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<T, C, R>,      // needed for the transpose()
+        S1: Storage<T, R, C> + ReshapableStorage<T, R, C, C, R, Output = S2>, // for the reshape()
     {
         let mut mat = mat;
         let (height, width) = mat.shape();
@@ -264,7 +270,7 @@ pub mod dcst {
         // Compute the FFT of each column of the matrix.
         let mut planner = DctPlanner::new();
         let dct_dim1 = planner.plan_dct3(height);
-        let mut scratch = vec![0.0; dct_dim1.get_scratch_len()];
+        let mut scratch = vec![T::default(); dct_dim1.get_scratch_len()];
         for buffer_dim1 in mat.as_mut_slice().chunks_exact_mut(height) {
             dct_dim1.process_dct3_with_scratch(buffer_dim1, &mut scratch);
         }
@@ -272,7 +278,7 @@ pub mod dcst {
         // Transpose the matrix to compute the FFT on the other dimension.
         let mut transposed = mat.transpose();
         let dct_dim2 = planner.plan_dct3(width);
-        scratch.resize(dct_dim2.get_scratch_len(), 0.0);
+        scratch.resize(dct_dim2.get_scratch_len(), T::default());
         for buffer_dim2 in transposed.as_mut_slice().chunks_exact_mut(width) {
             dct_dim2.process_dct3_with_scratch(buffer_dim2, &mut scratch);
         }
@@ -286,11 +292,12 @@ pub mod dcst {
     /// This uses rayon internally, see the rayon crate docs to control the level
     /// of parallelism.
     #[cfg(feature = "parallel")]
-    pub fn par_idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
+    pub fn par_idct_2d<T, R: Dim, C: Dim, S1, S2>(mat: Matrix<T, R, C, S1>) -> Matrix<T, C, R, S2>
     where
-        S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
-        S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
+        T: DctNum + Default,
+        S1: IsContiguous + RawStorageMut<T, R, C>, // for the first in-place FFT
+        DefaultAllocator: Allocator<T, C, R>,      // needed for the transpose()
+        S1: Storage<T, R, C> + ReshapableStorage<T, R, C, C, R, Output = S2>, // for the reshape()
     {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};
         let mut mat = mat;
