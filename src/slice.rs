@@ -165,6 +165,19 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
 /// 13, 14, 15, 16,
 /// ];
 /// unsafe {
+///     // can be ifftshit_zerocopy for it's output
+///     assert_eq!(
+///         fftshift_zerocopy(3, 3,
+///             fftshift_zerocopy(3, 3, &mut matrix.clone()),
+///         ),
+///         &matrix,
+///     );
+///     assert_eq!(
+///         fftshift_zerocopy(4, 4,
+///             fftshift_zerocopy(4, 4, &mut matrix2.clone()),
+///         ),
+///         &matrix2,
+///     );
 ///     assert_eq!(
 ///         fftshift_zerocopy(3, 3, &mut matrix),
 ///         [
