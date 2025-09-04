@@ -2,6 +2,8 @@
 
 //! Fourier transform for 2D data such as images.
 
+use std::ptr;
+
 use rustfft::FftDirection;
 use rustfft::{num_complex::Complex, FftPlanner};
 
@@ -99,6 +101,8 @@ fn transpose<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Ve
 /// Inverse operation of the quadrants shift performed by fftshift.
 ///
 /// It is different than fftshift if one dimension has an odd length.
+///
+/// Will `panic!` on odd width or odd height.
 pub fn ifftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
     // TODO: do actual code instead of relying on fftshift.
     let is_even = |length| length % 2 == 0;
@@ -113,13 +117,14 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
     let mut shifted = vec![T::default(); matrix.len()];
     let half_width = width / 2;
     let half_height = height / 2;
+    let height_off = (height - half_height) * width;
     // Shift top and bottom quadrants.
     for row in 0..half_height {
         // top
         let mrow_start = row * width;
         let m_row = &matrix[mrow_start..mrow_start + width];
         // bottom
-        let srow_start = mrow_start + (height - half_height) * width;
+        let srow_start = mrow_start + height_off;
         let s_row = &mut shifted[srow_start..srow_start + width];
         // swap left and right
         s_row[width - half_width..width].copy_from_slice(&m_row[0..half_width]);
@@ -138,6 +143,83 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
         s_row[0..width - half_width].copy_from_slice(&m_row[half_width..width]);
     }
     shifted
+}
+
+/// Shift the 4 quadrants of a Fourier transform to have all the low frequencies
+/// at the center of the image.
+///
+/// WARN: This have different behaviour than fftshift for odd dimensions
+///
+/// ```rust
+/// use fft2d::slice::fftshift_zerocopy;
+///
+/// let mut matrix = [
+/// 1, 2, 3,
+/// 4, 5, 6,
+/// 7, 8, 9,
+/// ];
+/// let mut matrix2 = [
+///  1,  2,  3,  4,
+///  5,  6,  7,  8,
+///  9, 10, 11, 12,
+/// 13, 14, 15, 16,
+/// ];
+/// unsafe {
+///     assert_eq!(
+///         fftshift_zerocopy(3, 3, &mut matrix),
+///         [
+///          8, 9, 4,
+///          3, 5, 7,
+///          6, 1, 2,
+///         ],
+///     );
+///     assert_eq!(
+///         fftshift_zerocopy(4, 4, &mut matrix2),
+///         [
+///           11, 12,  9, 10,
+///           15, 16, 13, 14,
+///            3,  4,  1,  2,
+///            7,  8,  5,  6,
+///         ],
+///     );
+/// }
+/// ```
+///
+/// SAFETY: keep `matrix.len() >= height * width`.
+pub unsafe fn fftshift_zerocopy<T: Copy>(
+    width: usize,
+    height: usize,
+    matrix: &mut [T],
+) -> &mut [T] {
+    let half_width = width / 2;
+    let half_height = height / 2;
+    let half_width_ceil = width - half_width;
+    let half_height_ceil = height - half_height;
+
+    let mid = matrix.len() / 2;
+    let mid_point = (matrix.len() + 1) / 2;
+
+    let matrix_p = matrix.as_mut_ptr();
+
+    if height == 1 || width == 1 {
+        ptr::swap_nonoverlapping(matrix_p, matrix_p.add(mid_point), mid);
+        return matrix;
+    }
+
+    for h in 0..half_height {
+        let count = half_width_ceil;
+        let q2_line = matrix_p.add(h * width);
+        let q4_line = matrix_p.add((h + half_height_ceil) * width + half_width);
+        ptr::swap_nonoverlapping(q2_line, q4_line, count);
+    }
+    for h in 0..half_height_ceil {
+        let count = width - half_width_ceil;
+        let q1_start = h * width + half_height_ceil;
+        let q3_start = (h + half_height) * width;
+        ptr::swap_nonoverlapping(matrix_p.add(q1_start), matrix_p.add(q3_start), count);
+    }
+
+    matrix
 }
 
 // Sine and Cosine transforms ##################################################
