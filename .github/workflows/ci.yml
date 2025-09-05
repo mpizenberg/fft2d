@@ -33,7 +33,7 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
-    name: Check formatting
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
