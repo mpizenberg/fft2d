@@ -27,7 +27,7 @@ pub fn fft_2d<R: Dim, C: Dim, S1, S2>(
 ) -> Matrix<Complex<f64>, C, R, S2>
 where
     S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>,
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,
+    DefaultAllocator: Allocator<C, R>,
     S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>,
 {
     fft_2d_with_direction(mat, FftDirection::Forward)
@@ -51,7 +51,7 @@ pub fn ifft_2d<R: Dim, C: Dim, S1, S2>(
 ) -> Matrix<Complex<f64>, C, R, S2>
 where
     S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>,
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,
+    DefaultAllocator: Allocator<C, R>,
     S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>,
 {
     fft_2d_with_direction(mat, FftDirection::Inverse)
@@ -76,7 +76,7 @@ fn fft_2d_with_direction<R: Dim, C: Dim, S1, S2>(
 ) -> Matrix<Complex<f64>, C, R, S2>
 where
     S1: IsContiguous + RawStorageMut<Complex<f64>, R, C>, // for the first in-place FFT
-    DefaultAllocator: Allocator<Complex<f64>, C, R>,      // needed for the transpose()
+    DefaultAllocator: Allocator<C, R>,                    // needed for the transpose()
     S1: Storage<Complex<f64>, R, C> + ReshapableStorage<Complex<f64>, R, C, C, R, Output = S2>, // for the reshape()
 {
     // FFT in the first dimension (columns).
@@ -132,25 +132,25 @@ where
     let half_height = height / 2;
 
     // Four quadrants of the original matrix.
-    let mat_top_left = mat.slice_range(0..half_height, 0..half_width);
-    let mat_top_right = mat.slice_range(0..half_height, half_width..);
-    let mat_bottom_left = mat.slice_range(half_height.., 0..half_width);
-    let mat_bottom_right = mat.slice_range(half_height.., half_width..);
+    let mat_top_left = mat.view_range(0..half_height, 0..half_width);
+    let mat_top_right = mat.view_range(0..half_height, half_width..);
+    let mat_bottom_left = mat.view_range(half_height.., 0..half_width);
+    let mat_bottom_right = mat.view_range(half_height.., half_width..);
 
     // Shift top and bottom quadrants.
     let mut shifted_bottom_right =
-        shifted.slice_range_mut(height - half_height..height, width - half_width..width);
+        shifted.view_range_mut(height - half_height..height, width - half_width..width);
     shifted_bottom_right.copy_from(&mat_top_left);
     let mut shifted_bottom_left =
-        shifted.slice_range_mut(height - half_height..height, 0..width - half_width);
+        shifted.view_range_mut(height - half_height..height, 0..width - half_width);
     shifted_bottom_left.copy_from(&mat_top_right);
 
     // Shift bottom and top quadrants.
     let mut shifted_top_right =
-        shifted.slice_range_mut(0..height - half_height, width - half_width..width);
+        shifted.view_range_mut(0..height - half_height, width - half_width..width);
     shifted_top_right.copy_from(&mat_bottom_left);
     let mut shifted_top_left =
-        shifted.slice_range_mut(0..height - half_height, 0..width - half_width);
+        shifted.view_range_mut(0..height - half_height, 0..width - half_width);
     shifted_top_left.copy_from(&mat_bottom_right);
 
     shifted
@@ -180,7 +180,7 @@ pub mod dcst {
     pub fn dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where
         S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        DefaultAllocator: Allocator<C, R>,           // needed for the transpose()
         S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
     {
         let mut mat = mat;
@@ -213,7 +213,7 @@ pub mod dcst {
     pub fn par_dct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where
         S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        DefaultAllocator: Allocator<C, R>,           // needed for the transpose()
         S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
     {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};
@@ -255,7 +255,7 @@ pub mod dcst {
     pub fn idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where
         S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        DefaultAllocator: Allocator<C, R>,           // needed for the transpose()
         S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
     {
         let mut mat = mat;
@@ -289,7 +289,7 @@ pub mod dcst {
     pub fn par_idct_2d<R: Dim, C: Dim, S1, S2>(mat: Matrix<f64, R, C, S1>) -> Matrix<f64, C, R, S2>
     where
         S1: IsContiguous + RawStorageMut<f64, R, C>, // for the first in-place FFT
-        DefaultAllocator: Allocator<f64, C, R>,      // needed for the transpose()
+        DefaultAllocator: Allocator<C, R>,           // needed for the transpose()
         S1: Storage<f64, R, C> + ReshapableStorage<f64, R, C, C, R, Output = S2>, // for the reshape()
     {
         use rayon::prelude::{ParallelIterator, ParallelSliceMut};

@@ -3,9 +3,10 @@
 use std::io::{BufWriter, Write};
 
 use fft2d::nalgebra::dcst::{dct_2d, idct_2d};
-use image::{GrayImage, ImageBuffer, Luma, Primitive, Rgb};
+use image::{GrayImage, ImageBuffer, Luma, Primitive};
 use nalgebra::{
-    allocator::Allocator, DMatrix, DefaultAllocator, Dim, MatrixSlice, Scalar, Vector2, Vector3,
+    allocator::Allocator, DMatrix, DefaultAllocator, Dim, MatrixView as MatrixSlice, Scalar,
+    Vector2, Vector3,
 };
 use show_image::create_window;
 
@@ -18,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     window_in.wait_until_destroyed()?;
 
     // Extract normals.
-    let mut normals = matrix_from_rgb_image(&img, |x| *x as f32 / 255.0);
+    let mut normals = matrix_from_rgb_image(&img, |x| f32::from(*x) / 255.0);
     for n in normals.iter_mut() {
         if n.x + n.y + n.z != 0.0 {
             n.x = (n.x - 0.5) * -2.0;
@@ -29,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let depths = normal_integration(&normals);
-    mat_show("depth", depths.slice_range(.., ..));
+    mat_show("depth", depths.view_range(.., ..));
 
     // Save depth map as OBJ.
     eprintln!("Saving data/cat.obj to disk");
@@ -71,8 +72,8 @@ fn normal_integration(normals: &DMatrix<Vector3<f32>>) -> DMatrix<f32> {
         }
     }
 
-    mat_show("gx", gradient_x.slice_range(.., ..));
-    mat_show("gy", gradient_y.slice_range(.., ..));
+    mat_show("gx", gradient_x.view_range(.., ..));
+    mat_show("gy", gradient_y.view_range(.., ..));
 
     // Depth map by Poisson solver, up to an additive constant.
     dct_poisson(&gradient_y, &gradient_x)
@@ -113,9 +114,9 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
 
     // Compute divergence term of p for the center of the matrix.
     let mut px = DMatrix::zeros(nrows, ncols);
-    let p_top = p.slice_range(0..nrows - 2, ..);
-    let p_bottom = p.slice_range(2..nrows, ..);
-    px.slice_range_mut(1..nrows - 1, ..)
+    let p_top = p.view_range(0..nrows - 2, ..);
+    let p_bottom = p.view_range(2..nrows, ..);
+    px.view_range_mut(1..nrows - 1, ..)
         .copy_from(&(0.5 * (p_bottom - p_top)));
 
     // Special treatment for the first and last rows (Eq. 52 in [1]).
@@ -125,9 +126,9 @@ fn dct_poisson(p: &DMatrix<f32>, q: &DMatrix<f32>) -> DMatrix<f32> {
 
     // Compute divergence term of q for the center of the matrix.
     let mut qy = DMatrix::zeros(nrows, ncols);
-    let q_left = q.slice_range(.., 0..ncols - 2);
-    let q_right = q.slice_range(.., 2..ncols);
-    qy.slice_range_mut(.., 1..ncols - 1)
+    let q_left = q.view_range(.., 0..ncols - 2);
+    let q_right = q.view_range(.., 2..ncols);
+    qy.view_range_mut(.., 1..ncols - 1)
         .copy_from(&(0.5 * (q_right - q_left)));
 
     // Special treatment for the first and last columns (Eq. 52 in [1]).
@@ -190,7 +191,7 @@ fn mat_show<'a, R, C, RStride, CStride>(
     C: Dim,
     RStride: Dim,
     CStride: Dim,
-    DefaultAllocator: Allocator<f32, C, R>,
+    DefaultAllocator: Allocator<C, R>,
 {
     let mat = mat.to_owned().transpose();
     let mat_min = mat.min();
@@ -276,10 +277,16 @@ fn image_from_matrix<'a, T: Scalar, U: 'static + Primitive, F: Fn(&'a T) -> U>(
 
 /// Convert an RGB image into a `Vector3<T>` RGB matrix.
 /// Inverse operation of `rgb_from_matrix`.
-fn matrix_from_rgb_image<'a, T: 'static + Primitive, U: Scalar, F: Fn(&'a T) -> U>(
-    img: &'a ImageBuffer<Rgb<T>, Vec<T>>,
+fn matrix_from_rgb_image<'a, P, U, F>(
+    img: &'a ImageBuffer<P, Vec<P::Subpixel>>,
     scale: F,
-) -> DMatrix<Vector3<U>> {
+) -> DMatrix<Vector3<U>>
+where
+    P: image::Pixel,
+    P::Subpixel: Primitive,
+    U: Scalar,
+    F: Fn(&'a P::Subpixel) -> U,
+{
     // TODO: improve the suboptimal allocation in addition to transposition.
     let (width, height) = img.dimensions();
     DMatrix::from_iterator(
