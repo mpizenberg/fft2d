@@ -99,7 +99,7 @@ fn transpose<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Ve
 /// Inverse operation of the quadrants shift performed by fftshift.
 ///
 /// It is different than fftshift if one dimension has an odd length.
-pub fn ifftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
+pub fn ifftshift<T: Copy>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
     // TODO: do actual code instead of relying on fftshift.
     let is_even = |length| length % 2 == 0;
     assert!(is_even(width), "Need a dedicated implementation");
@@ -109,21 +109,25 @@ pub fn ifftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -
 
 /// Shift the 4 quadrants of a Fourier transform to have all the low frequencies
 /// at the center of the image.
-pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
-    let mut shifted = vec![T::default(); matrix.len()];
+pub fn fftshift<T: Copy>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
+    let mut shifted = matrix.to_vec();
+
     let half_width = width / 2;
+    let half_width_ceil = width - half_width;
     let half_height = height / 2;
+    let half_height_ceil = height - half_height;
+
     // Shift top and bottom quadrants.
     for row in 0..half_height {
         // top
         let mrow_start = row * width;
         let m_row = &matrix[mrow_start..mrow_start + width];
         // bottom
-        let srow_start = mrow_start + (height - half_height) * width;
+        let srow_start = mrow_start + half_height_ceil * width;
         let s_row = &mut shifted[srow_start..srow_start + width];
         // swap left and right
-        s_row[width - half_width..width].copy_from_slice(&m_row[0..half_width]);
-        s_row[0..width - half_width].copy_from_slice(&m_row[half_width..width]);
+        s_row[half_width_ceil..width].copy_from_slice(&m_row[0..half_width]);
+        s_row[0..half_width_ceil].copy_from_slice(&m_row[half_width..width]);
     }
     // Shift bottom and top quadrants.
     for row in half_height..height {
@@ -134,8 +138,8 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
         let srow_start = (row - half_height) * width;
         let s_row = &mut shifted[srow_start..srow_start + width];
         // swap left and right
-        s_row[width - half_width..width].copy_from_slice(&m_row[0..half_width]);
-        s_row[0..width - half_width].copy_from_slice(&m_row[half_width..width]);
+        s_row[half_width_ceil..width].copy_from_slice(&m_row[0..half_width]);
+        s_row[0..half_width_ceil].copy_from_slice(&m_row[half_width..width]);
     }
     shifted
 }
