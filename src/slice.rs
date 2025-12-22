@@ -2,6 +2,8 @@
 
 //! Fourier transform for 2D data such as images.
 
+use std::ptr;
+
 use rustfft::FftDirection;
 use rustfft::{num_complex::Complex, FftPlanner};
 
@@ -140,6 +142,50 @@ pub fn fftshift<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) ->
     shifted
 }
 
+/// Shift the 4 quadrants of a Fourier transform to have all the low frequencies
+/// at the center of the image.
+///
+/// ## Panic
+///
+/// If width/height was too high,
+///
+/// or one of them was not even, this will panic.
+pub fn fftshift_zerocopy<T: Copy>(width: usize, height: usize, matrix: &mut [T]) -> &mut [T] {
+    let is_even = |length| length % 2 == 0;
+    if matrix.len() < width * height {
+        panic!("matrix length cannot be smaller than width*height!");
+    }
+
+    if !is_even(width) || !is_even(height) {
+        panic!("odd dimensions are disallowed!");
+    }
+
+    let half_width = width / 2;
+    let half_height = height / 2;
+    let half_width_ceil = width.div_ceil(2);
+    let half_height_ceil = height.div_ceil(2);
+
+    let matrix_p = matrix.as_mut_ptr();
+    for h in 0..half_height {
+        let count = half_width_ceil;
+        unsafe {
+            let q2_line = matrix_p.add(h * width);
+            let q4_line = matrix_p.add((h + half_height_ceil) * width + half_width);
+            ptr::swap_nonoverlapping(q2_line, q4_line, count);
+        }
+    }
+    for h in 0..half_height_ceil {
+        let count = width - half_width_ceil;
+        unsafe {
+            let q1_start = h * width + half_width_ceil;
+            let q3_start = (h + half_height) * width;
+            ptr::swap_nonoverlapping(matrix_p.add(q1_start), matrix_p.add(q3_start), count);
+        }
+    }
+
+    matrix
+}
+
 // Sine and Cosine transforms ##################################################
 
 #[cfg(feature = "rustdct")]
@@ -272,12 +318,48 @@ pub mod dcst {
 }
 
 #[cfg(test)]
-#[cfg(feature = "rustdct")]
-#[cfg(feature = "parallel")]
 mod tests {
     use super::*;
 
     #[test]
+    #[rustfmt::skip]
+    fn test_zerocopy_fft_shift() {
+        let matrix = [
+             1,  2,  3,  4,
+             5,  6,  7,  8,
+             9, 10, 11, 12,
+            13, 14, 15, 16
+        ];
+        // handle non-sqaure
+        assert_eq!(
+            fftshift_zerocopy(4, 2, &mut [
+             1, 2, 3, 4,
+             5, 6, 7, 8,
+            ]),
+            [7, 8, 5, 6,
+             3, 4, 1, 2,],
+        );
+
+        // it doesn't require an ifftshift variant
+        assert_eq!(
+            fftshift_zerocopy(4, 4, fftshift_zerocopy(4, 4, &mut matrix.clone()),),
+            matrix,
+        );
+
+        // it's behaviour should be same as fftshift
+        for dimension in (2..=200).step_by(2) {
+            let mut matrix: Vec<_> = (0..).take(dimension * dimension).collect();
+            
+            assert_eq!(
+                fftshift(dimension, dimension, matrix.clone().as_slice()),
+                fftshift_zerocopy(dimension, dimension, &mut matrix),
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "rustdct")]
+    #[cfg(feature = "parallel")]
     fn test_identical_par_dct_result() {
         let test_vec = vec![
             54.75, 0.25, 69.39, 121.95, 15.86, 17.24, 77.48, 108.55, 127.40, 93.14, 49.28, 61.86,
@@ -299,6 +381,8 @@ mod tests {
         assert_eq!(non_para, parallel);
     }
     #[test]
+    #[cfg(feature = "rustdct")]
+    #[cfg(feature = "parallel")]
     fn test_identical_par_idct_result() {
         let test_vec = vec![
             72.16, 47.41, 122.96, 52.90, 36.35, 98.84, 84.12, 34.52, 61.06, 112.66, 39.91, 67.93,
