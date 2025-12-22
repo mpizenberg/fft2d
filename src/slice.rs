@@ -333,3 +333,17 @@ mod tests {
         assert_eq!(non_para, parallel);
     }
 }
+
+#[cfg(test)]
+mod ifft_test {
+    use crate::slice::{fftshift, ifftshift};
+
+    #[test]
+    fn test_ifftshift_odd() {
+        for i in 2..=200 {
+            let matrix = (0..i * (i + 2)).collect::<Vec<_>>();
+            assert_eq!(matrix, ifftshift(i, i + 2, &fftshift(i, i + 2, &matrix)),);
+            assert_eq!(matrix, ifftshift(i + 2, i, &fftshift(i + 2, i, &matrix)),);
+        }
+    }
+}
