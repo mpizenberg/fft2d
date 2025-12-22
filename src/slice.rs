@@ -2,6 +2,8 @@
 
 //! Fourier transform for 2D data such as images.
 
+use std::mem;
+
 use rustfft::FftDirection;
 use rustfft::{num_complex::Complex, FftPlanner};
 
@@ -100,22 +102,29 @@ fn transpose<T: Copy + Default>(width: usize, height: usize, matrix: &[T]) -> Ve
 ///
 /// It is different than fftshift if one dimension has an odd length.
 pub fn ifftshift<T: Copy>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
-    // TODO: do actual code instead of relying on fftshift.
-    let is_even = |length| length % 2 == 0;
-    assert!(is_even(width), "Need a dedicated implementation");
-    assert!(is_even(height), "Need a dedicated implementation");
-    fftshift(width, height, matrix)
+    fftshift_impl(width, height, matrix, true)
 }
 
 /// Shift the 4 quadrants of a Fourier transform to have all the low frequencies
 /// at the center of the image.
 pub fn fftshift<T: Copy>(width: usize, height: usize, matrix: &[T]) -> Vec<T> {
+    fftshift_impl(width, height, matrix, false)
+}
+
+/// Shift the 4 quadrants of a Fourier transform to have all the low frequencies
+/// at the center of the image.
+fn fftshift_impl<T: Copy>(width: usize, height: usize, matrix: &[T], inverse: bool) -> Vec<T> {
     let mut shifted = matrix.to_vec();
 
-    let half_width = width / 2;
-    let half_width_ceil = width - half_width;
-    let half_height = height / 2;
-    let half_height_ceil = height - half_height;
+    let mut half_width = width / 2;
+    let mut half_width_ceil = width - half_width;
+    let mut half_height = height / 2;
+    let mut half_height_ceil = height - half_height;
+
+    if inverse {
+        mem::swap(&mut half_height, &mut half_height_ceil);
+        mem::swap(&mut half_width, &mut half_width_ceil);
+    }
 
     // Shift top and bottom quadrants.
     for row in 0..half_height {
